@@ -19,30 +19,25 @@ class DatabaseConnection:
 
     def insert_users(self, users: list[str]) -> None:
         rows: list[tuple[str]] = [(n,) for n in users]
-        STATEMENT = "INSERT INTO users (name) VALUES (?)"
         with self.db:
-            _ = self.db.executemany(STATEMENT, rows)
+            _ = self.db.executemany("INSERT INTO users (name) VALUES (?)", rows)
 
 
-    def fetch_users(self, limit: int | None = None) -> list[tuple[int, str]]:
-        if limit is None:
-            cursor = self.db.execute("SELECT id, name FROM users")
-        else:
-            cursor = self.db.execute("SELECT id, name FROM users LIMIT ?", (limit,))
+    def fetch_users(self, limit: int = -1, offset: int = 0) -> list[tuple[int, str]]:
+        cursor = self.db.execute("SELECT id, name FROM users ORDER BY id LIMIT ? OFFSET ?", (limit, offset))
         rows: list[tuple[int, str]] = cursor.fetchall()
         return rows
 
     def update_users(self, users: list[str], ids: list[int]) -> None:
         rows: list[tuple[str, int]] = list(zip(users, ids, strict=True))
-        STATEMENT = "UPDATE users SET name = ? WHERE id = ?"
         with self.db:
-            _ = self.db.executemany(STATEMENT, rows)
+            _ = self.db.executemany("UPDATE users SET name = ? WHERE id = ?"
+, rows)
 
     def delete_user(self, index: list[int]) -> None:
         rows: list[tuple[int]] = [(i,) for i in index]
-        STATEMENT = "DELETE FROM users WHERE id = ?"
         with self.db:
-            _ = self.db.executemany(STATEMENT, rows)
+            _ = self.db.executemany("DELETE FROM users WHERE id = ?", rows)
 
     def close(self) -> None:
         self.db.close()

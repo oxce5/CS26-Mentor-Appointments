@@ -24,8 +24,11 @@ class DatabaseConnection:
             _ = self.db.executemany(STATEMENT, rows)
 
 
-    def fetch_users(self) -> list[tuple[int, str]]:
-        cursor = self.db.execute("SELECT id,name FROM users")
+    def fetch_users(self, limit: int | None = None) -> list[tuple[int, str]]:
+        if limit is None:
+            cursor = self.db.execute("SELECT id, name FROM users")
+        else:
+            cursor = self.db.execute("SELECT id, name FROM users LIMIT ?", (limit,))
         rows: list[tuple[int, str]] = cursor.fetchall()
         return rows
 

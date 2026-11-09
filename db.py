@@ -4,41 +4,21 @@ from dataclasses import dataclass, replace
 from types import TracebackType
 from typing import Self
 
-
-@dataclass(frozen=True)
-class Student:
-    name: str
-    student_id: int
-    email: str | None = None
-    id: int | None = None
-    created_at: str | None = None
-
-
-@dataclass(frozen=True)
-class Mentor:
-    name: str
-    student_id: int
-    email: str | None = None
-    id: int | None = None
-    created_at: str | None = None
-    subjects: tuple[str, ...] = ()
-
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS students (
-    id         INTEGER PRIMARY KEY,
-    student_id INTEGER NOT NULL UNIQUE,
-    name       TEXT    NOT NULL,
-    umindanao_email    TEXT,   NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id              INTEGER PRIMARY KEY,
+    student_id      INTEGER NOT NULL UNIQUE,
+    name            TEXT    NOT NULL,
+    umindanao_email TEXT    NOT NULL CHECK (length(trim(umindanao_email)) > 0),
+    created_at      TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS mentors (
-    id         INTEGER PRIMARY KEY,
-    student_id INTEGER NOT NULL UNIQUE,
-    name       TEXT    NOT NULL,
-    umindanao_email    TEXT NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id              INTEGER PRIMARY KEY,
+    student_id      INTEGER NOT NULL UNIQUE,
+    name            TEXT    NOT NULL,
+    umindanao_email TEXT    NOT NULL CHECK (length(trim(umindanao_email)) > 0),
+    created_at      TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS mentor_subjects (
@@ -47,6 +27,23 @@ CREATE TABLE IF NOT EXISTS mentor_subjects (
     PRIMARY KEY (mentor_id, subject)
 );
 """
+
+@dataclass(frozen=True)
+class Student:
+    name: str
+    student_id: int
+    umindanao_email: str
+    id: int | None = None
+    created_at: str | None = None
+
+@dataclass(frozen=True)
+class Mentor:
+    name: str
+    student_id: int
+    umindanao_email: str
+    id: int | None = None
+    created_at: str | None = None
+    subjects: tuple[str, ...] = ()
 
 
 def _normalize_subjects(subjects: tuple[str, ...]) -> tuple[str, ...]:
@@ -57,25 +54,18 @@ def _normalize_subjects(subjects: tuple[str, ...]) -> tuple[str, ...]:
 class DatabaseConnection:
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.db: sqlite3.Connection = sqlite3.connect(path)
+        self.db.row_factory = sqlite3.Row  # rows support r["name"] and **r
         _ = self.db.execute("PRAGMA foreign_keys = ON")  # per-connection in SQLite
         _ = self.db.executescript(SCHEMA)
 
     # ---------- students ----------
 
     def fetch_students(self, limit: int = -1, offset: int = 0) -> list[Student]:
-        cursor = self.db.execute(
-            (
-                "SELECT id, student_id, name, email, created_at "
-                + "FROM students ORDER BY id LIMIT ? OFFSET ?"
-            ),
+        rows = self.db.execute(
+            "SELECT * FROM students ORDER BY id LIMIT ? OFFSET ?",
             (limit, offset),
         )
-        return [
-            Student(
-                id=i, student_id=s, name=n, email=e, created_at=c
-            )  # pyright: ignore[reportAny]
-            for i, s, n, e, c in cursor  # pyright: ignore[reportAny]
-        ]
+        return [Student(**r) for r in rows]  # pyright: ignore[reportAny]
 
     def insert_students(self, students: list[Student]) -> list[Student]:
         saved: list[Student] = []
@@ -83,23 +73,32 @@ class DatabaseConnection:
             for stu in students:
                 row = self.db.execute(
                     (
-                        "INSERT INTO students (student_id, name, email) "
+                        "INSERT INTO students (student_id, name, umindanao_email) "
                         + "VALUES (?, ?, ?) RETURNING id, created_at"
                     ),
-                    (stu.student_id, stu.name, stu.email),
+                    (stu.student_id, stu.name, stu.umindanao_email),
                 ).fetchone()
-        saved.append(replace(stu, id=row[0], created_at=row[1]))
+                saved.append(
+                    replace(
+                        stu,
+                        id=row["id"],
+                        created_at=row["created_at"],
+                    )
+                )
         return saved
 
     def update_students(self, students: list[Student]) -> None:
-        rows: list[tuple[int, str, str | None, int]] = []
+        rows: list[tuple[int, str, str, int]] = []
         for stu in students:
             if stu.id is None:
                 raise ValueError(f"Cannot update unsaved student {stu.name!r}")
-            rows.append((stu.student_id, stu.name, stu.email, stu.id))
+            rows.append((stu.student_id, stu.name, stu.umindanao_email, stu.id))
         with self.db:
             _ = self.db.executemany(
-                "UPDATE students SET student_id = ?, name = ?, email = ? WHERE id = ?",
+                (
+                    "UPDATE students SET student_id = ?, name = ?, umindanao_email = ? "
+                    + "WHERE id = ?"
+                ),
                 rows,
             )
 
@@ -115,7 +114,7 @@ class DatabaseConnection:
         if not mentor_ids:
             return {}
         marks = ",".join("?" * len(mentor_ids))  # placeholders only, no user data
-        cursor = self.db.execute(
+        rows = self.db.execute(
             (
                 "SELECT mentor_id, subject FROM mentor_subjects "
                 + f"WHERE mentor_id IN ({marks}) ORDER BY mentor_id, subject"
@@ -123,32 +122,20 @@ class DatabaseConnection:
             mentor_ids,
         )
         grouped: dict[int, list[str]] = {}
-        for mentor_id, subject in cursor:  # pyright: ignore[reportAny]
-            grouped.setdefault(mentor_id, []).append(
-                subject
-            )  # pyright: ignore[reportAny]
+        for r in rows:
+            bucket = grouped.setdefault(r["mentor_id"], [])  # pyright: ignore[reportAny]
+            bucket.append(r["subject"])  # pyright: ignore[reportAny]
         return {k: tuple(v) for k, v in grouped.items()}
 
     def fetch_mentors(self, limit: int = -1, offset: int = 0) -> list[Mentor]:
         rows = self.db.execute(
-            (
-                "SELECT id, student_id, name, email, created_at "
-                + "FROM mentors ORDER BY id LIMIT ? OFFSET ?"
-            ),
+            "SELECT * FROM mentors ORDER BY id LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
-        ids: list[int] = [r[0] for r in rows]  # pyright: ignore[reportAny]
-        subjects = self._subjects_for(ids)
+        subjects = self._subjects_for([r["id"] for r in rows])  # pyright: ignore[reportAny]
         return [
-            Mentor(
-                id=i,
-                student_id=s,
-                name=n,
-                email=e,
-                created_at=c,
-                subjects=subjects.get(i, ()),
-            )
-            for i, s, n, e, c in rows
+            Mentor(**r, subjects=subjects.get(r["id"], ()))  # pyright: ignore[reportAny]
+            for r in rows
         ]
 
     def insert_mentors(self, mentors: list[Mentor]) -> list[Mentor]:
@@ -158,17 +145,22 @@ class DatabaseConnection:
                 subjects = _normalize_subjects(m.subjects)
                 row = self.db.execute(
                     (
-                        "INSERT INTO mentors (student_id, name, email) "
+                        "INSERT INTO mentors (student_id, name, umindanao_email) "
                         + "VALUES (?, ?, ?) RETURNING id, created_at"
                     ),
-                    (m.student_id, m.name, m.email),
+                    (m.student_id, m.name, m.umindanao_email),
                 ).fetchone()
                 _ = self.db.executemany(
                     "INSERT INTO mentor_subjects (mentor_id, subject) VALUES (?, ?)",
-                    [(row[0], s) for s in subjects],
+                    [(row["id"], s) for s in subjects],  # pyright: ignore[reportAny]
                 )
                 saved.append(
-                    replace(m, id=row[0], created_at=row[1], subjects=subjects)
+                    replace(
+                        m,
+                        id=row["id"],  # pyright: ignore[reportAny]
+                        created_at=row["created_at"],  # pyright: ignore[reportAny]
+                        subjects=subjects,
+                    )
                 )
         return saved
 
@@ -179,8 +171,11 @@ class DatabaseConnection:
         with self.db:  # one transaction: all mentors update or none do
             for m in mentors:
                 _ = self.db.execute(
-                    "UPDATE mentors SET student_id = ?, name = ?, email = ? WHERE id = ?",
-                    (m.student_id, m.name, m.email, m.id),
+                    (
+                        "UPDATE mentors SET student_id = ?, name = ?, umindanao_email = ? "
+                        + "WHERE id = ?"
+                    ),
+                    (m.student_id, m.name, m.umindanao_email, m.id),
                 )
                 _ = self.db.execute(
                     "DELETE FROM mentor_subjects WHERE mentor_id = ?", (m.id,)

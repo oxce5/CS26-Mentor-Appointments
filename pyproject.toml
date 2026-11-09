@@ -1,12 +1,12 @@
 [project]
-name = "practice"
-version = "0.1.0"
-description = "Add your description here"
+name = "Mentee Monitoring"
+version = "v0.1.0 (dev)"
+description = "CS26 Final Project - Mentee Monitoring"
 readme = "README.md"
 authors = [
     { name = "avg.gamer", email = "avg.gamer@proton.me" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = []
 
 [build-system]

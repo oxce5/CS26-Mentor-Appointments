@@ -5,6 +5,8 @@ build/
 dist/
 wheels/
 *.egg-info
+.mypy_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv
@@ -12,5 +14,8 @@ wheels/
 # Configuration
 .env
 
+# Databases (generated artifacts)
 database.db
+mentoring.db
+
 TODO.md

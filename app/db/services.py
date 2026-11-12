@@ -4,14 +4,18 @@ Requires SessionLocal = sessionmaker(engine, expire_on_commit=False) so the retu
 objects stay readable after the session closes (relationships are eager-loaded below).
 """
 
-from datetime import date
+from datetime import date, time
 
+from app.db.engine import SessionLocal
+from app.db.models import (
+    MentorAvailability,
+    MentorProfile,
+    MentorSpecialization,
+    Student,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
-
-from app.db.engine import SessionLocal
-from app.db.models import MentorProfile, MentorSpecialization, Student
 
 
 class ServiceError(Exception):
@@ -153,6 +157,22 @@ def set_mentor_subjects(student_id: str, subjects: list[str]) -> MentorProfile:
         for name in wanted - set(current):
             profile.specialization.append(MentorSpecialization(specialization=name))
         return profile
+
+
+def add_availability(
+    student_id: str, weekday: int, start: time, end: time
+) -> MentorAvailability:
+    if end <= start:
+        raise ServiceError("End time must be after start time.")
+    with SessionLocal() as session, session.begin():
+        profile = _find_mentor(session, student_id)
+        for w in profile.availability:
+            if w.weekday == weekday and start < w.end_time and w.start_time < end:
+                raise ServiceError("That window overlaps an existing one.")
+        window = MentorAvailability(weekday=weekday, start_time=start, end_time=end)
+        profile.availability.append(window)
+        session.flush()
+        return window
 
 
 def retire(student_id: str, status: str = "quit") -> MentorProfile:

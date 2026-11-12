@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from sqlalchemy import CheckConstraint, ForeignKey, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -36,6 +36,9 @@ class MentorProfile(Base):
     specialization: Mapped[list["MentorSpecialization"]] = relationship(
         cascade="all, delete-orphan"
     )
+    availability: Mapped[list["MentorAvailability"]] = relationship(
+        cascade="all, delete-orphan"
+    )
 
 
 class MentorSpecialization(Base):
@@ -43,3 +46,16 @@ class MentorSpecialization(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     mentor_profile_id: Mapped[int] = mapped_column(ForeignKey("mentor_profile.id"))
     specialization: Mapped[str]
+
+
+class MentorAvailability(Base):
+    __tablename__ = "mentor_availability"  # pyright: ignore[reportUnannotatedClassAttribute]
+    __table_args__ = (
+        CheckConstraint("weekday BETWEEN 0 AND 6", name="availability_weekday"),
+        CheckConstraint("end_time > start_time", name="availability_time_order"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mentor_profile_id: Mapped[int] = mapped_column(ForeignKey("mentor_profile.id"))
+    weekday: Mapped[int]  # 0 = Monday, matching Python's date.weekday()
+    start_time: Mapped[time]
+    end_time: Mapped[time]

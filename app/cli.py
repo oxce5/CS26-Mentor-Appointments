@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 from app.db import services
+from app.db.engine import init_db
 from app.db.models import MentorProfile
 from app.db.services import ServiceError
 
@@ -78,6 +79,7 @@ def mentors_retire(student_id: str, status: str = "quit") -> None:
 
 
 def main() -> None:
+    init_db()  # auto-initialize the database schema if the DB file is missing
     try:
         app()
     except ServiceError as exc:

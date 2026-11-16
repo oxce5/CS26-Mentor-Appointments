@@ -70,7 +70,7 @@ class Appointment(Base):
         ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
-    mentor_id: Mapped[int] = mapped_column(ForeignKey("mentor_profiles.id"))
+    mentor_id: Mapped[int] = mapped_column(ForeignKey(MentorProfile.id))
     student_id: Mapped[int] = mapped_column(ForeignKey("student.id"))
     subject: Mapped[str] = mapped_column(String)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime)  # naive UTC

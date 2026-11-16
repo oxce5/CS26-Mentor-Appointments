@@ -7,9 +7,11 @@ from typing import Annotated
 
 import typer
 from app.db import actions
+from app.db.appointments import AppointmentError
 from app.db.engine import init_db
 from app.db.helpers import ServiceError
 from app.db.models import MentorProfile
+from sqlalchemy.exc import SQLAlchemyError
 
 app = typer.Typer(no_args_is_help=True, help="Mentoring platform")
 students_app = typer.Typer(no_args_is_help=True, help="Manage students")
@@ -82,9 +84,13 @@ def main() -> None:
     init_db()  # auto-initialize the database schema if the DB file is missing
     try:
         app()
-    except ServiceError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise SystemExit(1) from exc
+    except (ServiceError, AppointmentError) as e:
+        typer.secho(f"{type(e).__name__}: {e}", fg=typer.colors.RED, err=True)
+        raise SystemExit(1)
+    except SQLAlchemyError as e:
+        detail = getattr(e, "orig", None) or e
+        typer.secho(f"{type(e).__name__}: {detail}", fg=typer.colors.RED, err=True)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

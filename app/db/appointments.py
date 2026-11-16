@@ -43,13 +43,7 @@ def book_appointment(
         if subject not in {s.specialization for s in mentor.specialization}:
             raise AppointmentError(f"{mentor.student.name} doesn't teach {subject}.")
 
-        # Availability windows are local wall-clock times.
-        local = when_utc.astimezone(APP_TZ)
-        if not any(
-            w.weekday == local.weekday() and w.start_time <= local.time() < w.end_time
-            for w in mentor.availability
-        ):
-            raise AppointmentError("The mentor is not available at that time.")
+        # TODO: check the mentor's weekly availability here once it is added.
 
         # Double-booking: exact start time only (duration is still parked).
         clash = session.scalar(

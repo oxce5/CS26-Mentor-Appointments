@@ -75,3 +75,30 @@ def book_appointment(
         session.add(appointment)
         session.flush()
         return appointment
+
+
+def cancel_appointment(appointment_id: int, student_id: str):
+    student_id = clean_student_id(student_id)
+    with SessionLocal() as session, session.begin():
+        appointment = session.get(Appointment, appointment_id)
+        if appointment is None:
+            raise AppointmentError("Appointment not found.")
+
+        actor = find_student(session, student_id)
+        participants = {appointment.student_id, appointment.mentor.student.id}
+        if actor.id not in participants:
+            raise AppointmentError(
+                "Only the mentor or the student can cancel this appointment."
+            )
+
+        if appointment.status != "scheduled":
+            raise AppointmentError(
+                f"Only scheduled appointments can be cancelled (this one is {appointment.status})."
+            )
+        if appointment.scheduled_at <= datetime.now(UTC).replace(tzinfo=None):
+            raise AppointmentError(
+                "That appointment has already started. Mark it attended or absent instead."
+            )
+
+        appointment.status = "cancelled"
+        return appointment

@@ -63,13 +63,15 @@ class MentorAvailability(Base):
 
 class Appointment(Base):
     __tablename__ = "appointments"
-    __table_args__ = CheckConstraint(
-        "status IN ('scheduled', 'attended', 'absent', 'cancelled')",
-        name="status_valid",
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('scheduled', 'attended', 'absent', 'cancelled')",
+            name="status_valid",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     mentor_id: Mapped[int] = mapped_column(ForeignKey("mentor_profiles.id"))
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"))
     subject: Mapped[str] = mapped_column(String)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime)  # naive UTC
     status: Mapped[str] = mapped_column(String, default="scheduled")

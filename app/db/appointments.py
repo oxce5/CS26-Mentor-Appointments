@@ -1,12 +1,11 @@
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+
 from app.db.engine import SessionLocal
 from app.db.helpers import clean_student_id, find_mentor, find_student
-from app.db.models import (
-    Appointment,
-)
-from sqlalchemy import select
+from app.db.models import Appointment
 
 APP_TZ = ZoneInfo("Asia/Manila")  # availability windows are in this zone
 
@@ -43,7 +42,13 @@ def book_appointment(
         if subject not in {s.specialization for s in mentor.specialization}:
             raise AppointmentError(f"{mentor.student.name} doesn't teach {subject}.")
 
-        # TODO: check the mentor's weekly availability here once it is added.
+        local = when_utc.astimezone(APP_TZ)
+
+        if not any(
+            w.weekday == local.weekday() and w.start_time <= local.time() < w.end_time
+            for w in mentor.availability
+        ):
+            raise AppointmentError("The mentor is not available at that time.")
 
         # Double-booking: exact start time only (duration is still parked).
         clash = session.scalar(
@@ -71,7 +76,9 @@ def book_appointment(
         return appointment
 
 
-def cancel_appointment(appointment_id: int, student_id: str):
+def cancel_appointment(appointment_id: int, student_id: str) -> Appointment:
+    """Cancel a scheduled appointment. student_id is whoever is cancelling:
+    either the student or the mentor of that appointment."""
     student_id = clean_student_id(student_id)
     with SessionLocal() as session, session.begin():
         appointment = session.get(Appointment, appointment_id)

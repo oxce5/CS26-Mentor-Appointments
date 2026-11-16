@@ -1,9 +1,8 @@
 import os
 
+from app.db.models import Base
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-
-from .models import Base
 
 engine = create_engine("sqlite:///mentoring.db")
 SessionLocal = sessionmaker(engine, expire_on_commit=False)

@@ -30,7 +30,7 @@ def _normalize_subjects(subjects: list[str]) -> tuple[str, ...]:
 STUDENT_ID_LENGTH = 6
 
 
-def _clean_student_id(student_id: str) -> str:
+def clean_student_id(student_id: str) -> str:
     cleaned = student_id.strip()
     valid = cleaned.isascii() and cleaned.isdigit()
     if not valid or len(cleaned) != STUDENT_ID_LENGTH:
@@ -38,14 +38,14 @@ def _clean_student_id(student_id: str) -> str:
     return cleaned
 
 
-def _find_student(session: Session, student_id: str) -> Student:
+def find_student(session: Session, student_id: str) -> Student:
     student = session.scalar(select(Student).where(Student.student_id == student_id))
     if student is None:
         raise ServiceError(f"No student with ID {student_id}.")
     return student
 
 
-def _find_mentor(session: Session, student_id: str) -> MentorProfile:
+def find_mentor(session: Session, student_id: str) -> MentorProfile:
     profile = session.scalar(
         select(MentorProfile)
         .join(MentorProfile.student)

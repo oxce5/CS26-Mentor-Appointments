@@ -1,4 +1,77 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from app.db.models import Appointments
+from app.db.engine import SessionLocal
+from app.db.helpers import clean_student_id, find_mentor, find_student
+from app.db.models import (
+    Appointment,
+)
+from sqlalchemy import select
+
+APP_TZ = ZoneInfo("Asia/Manila")  # availability windows are in this zone
+
+
+class AppointmentError(Exception):
+    """A problem raised while trying to book an appointment."""
+
+
+def book_appointment(
+    mentee_student_id: str,
+    mentor_student_id: str,
+    subject: str,
+    scheduled_at: datetime,
+) -> Appointment:
+    if scheduled_at.tzinfo is None:
+        raise AppointmentError("The appointment time must include a time zone.")
+    when_utc = scheduled_at.astimezone(UTC)
+    if when_utc <= datetime.now(UTC):
+        raise AppointmentError("Appointments must be in the future.")
+    when_db = when_utc.replace(tzinfo=None)  # SQLite stores naive UTC
+
+    subject = subject.strip().title()
+
+    with SessionLocal() as session, session.begin():
+        mentee = find_student(session, clean_student_id(mentee_student_id))
+        mentor = find_mentor(session, clean_student_id(mentor_student_id))
+
+        if mentor.student.id == mentee.id:
+            raise AppointmentError("You can't book an appointment with yourself.")
+        if mentor.status != "active":
+            raise AppointmentError(
+                f"{mentor.student.name} is no longer an active mentor."
+            )
+        if subject not in {s.specialization for s in mentor.specialization}:
+            raise AppointmentError(f"{mentor.student.name} doesn't teach {subject}.")
+
+        # Availability windows are local wall-clock times.
+        local = when_utc.astimezone(APP_TZ)
+        if not any(
+            w.weekday == local.weekday() and w.start_time <= local.time() < w.end_time
+            for w in mentor.availability
+        ):
+            raise AppointmentError("The mentor is not available at that time.")
+
+        # Double-booking: exact start time only (duration is still parked).
+        clash = session.scalar(
+            select(Appointment.id).where(
+                Appointment.scheduled_at == when_db,
+                Appointment.status == "scheduled",
+                (Appointment.mentor_id == mentor.id)
+                | (Appointment.student_id == mentee.id),
+            )
+        )
+        if clash is not None:
+            raise AppointmentError(
+                "Either you or the mentor already has a session then."
+            )
+
+        appointment = Appointment(
+            mentor_id=mentor.id,
+            student_id=mentee.id,
+            subject=subject,
+            scheduled_at=when_db,
+            status="scheduled",
+        )
+        session.add(appointment)
+        session.flush()
+        return appointment

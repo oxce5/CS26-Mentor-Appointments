@@ -1,5 +1,3 @@
-import os
-
 from app.db.models import Base
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -15,8 +13,4 @@ def _fk_on(dbapi_conn, _record):
 
 
 def init_db() -> None:
-    """Create the database tables if the database file doesn't exist yet."""
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    db_path = os.path.join(project_root, "mentoring.db")
-    if not os.path.exists(db_path):
-        Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine)

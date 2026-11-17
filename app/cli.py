@@ -8,13 +8,12 @@ from datetime import date, datetime, time
 from typing import Annotated
 
 import typer
-from sqlalchemy.exc import SQLAlchemyError
-
 from app.db import appointments, mentor_actions, student_actions
 from app.db.appointments import APP_TZ, AppointmentError
 from app.db.engine import init_db
 from app.db.helpers import ServiceError
 from app.db.models import MentorProfile
+from sqlalchemy.exc import SQLAlchemyError
 
 app = typer.Typer(no_args_is_help=True, help="Mentoring platform")
 students_app = typer.Typer(no_args_is_help=True, help="Manage students")
@@ -136,7 +135,7 @@ def availability_add(student_id: str, weekday: str, start: str, end: str) -> Non
         student_id, _parse_weekday(weekday), _parse_clock(start), _parse_clock(end)
     )
     typer.echo(
-        f"Added window {window.id}: {WEEKDAYS[window.weekday].title()} "
+        f"Added window {window.id}: {WEEKDAYS[window.weekday].title()} "  # pyright: ignore[reportImplicitStringConcatenation]
         f"{window.start_time:%H:%M}-{window.end_time:%H:%M}."
     )
 
@@ -149,7 +148,7 @@ def availability_list(student_id: str) -> None:
         typer.echo("No availability set.")
     for w in windows:
         typer.echo(
-            f"{w.id}: {WEEKDAYS[w.weekday].title()} "
+            f"{w.id}: {WEEKDAYS[w.weekday].title()} "  # pyright: ignore[reportImplicitStringConcatenation]
             f"{w.start_time:%H:%M}-{w.end_time:%H:%M}"
         )
 
